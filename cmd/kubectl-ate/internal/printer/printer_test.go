@@ -233,18 +233,42 @@ func TestPrintActorsTo_Invalid(t *testing.T) {
 	}
 }
 
+// orderedActor sets fields whose declaration order differs from alphabetical
+// order, so the json and yaml tests pin declaration order. The crash message
+// pins how <, > and & are escaped.
+func orderedActor() *ateapi.Actor {
+	return &ateapi.Actor{
+		Metadata:      &ateapi.ResourceMetadata{Atespace: "s", Name: "id-1", Version: 2},
+		ActorTemplate: &ateapi.ObjectRef{Atespace: "s", Name: "tmpl"},
+		Status: &ateapi.ActorStatus{
+			State: ateapi.ActorState_ACTOR_STATE_RUNNING,
+			Crash: &ateapi.ActorCrash{Message: "exit <1> & core"},
+		},
+	}
+}
+
 func TestPrintActorTo_JSON(t *testing.T) {
 	var buf bytes.Buffer
-	actor := &ateapi.Actor{Metadata: &ateapi.ResourceMetadata{Name: "id-1", Version: 2}}
 
-	if err := PrintActorTo(&buf, actor, "json"); err != nil {
+	if err := PrintActorTo(&buf, orderedActor(), "json"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	expected := `{
   "metadata": {
+    "atespace": "s",
     "name": "id-1",
     "version": "2"
+  },
+  "actorTemplate": {
+    "atespace": "s",
+    "name": "tmpl"
+  },
+  "status": {
+    "state": "ACTOR_STATE_RUNNING",
+    "crash": {
+      "message": "exit \u003c1\u003e \u0026 core"
+    }
   }
 }
 `
@@ -255,15 +279,22 @@ func TestPrintActorTo_JSON(t *testing.T) {
 
 func TestPrintActorTo_YAML(t *testing.T) {
 	var buf bytes.Buffer
-	actor := &ateapi.Actor{Metadata: &ateapi.ResourceMetadata{Name: "id-1", Version: 2}}
 
-	if err := PrintActorTo(&buf, actor, "yaml"); err != nil {
+	if err := PrintActorTo(&buf, orderedActor(), "yaml"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	expected := `metadata:
+  atespace: s
   name: id-1
   version: "2"
+actorTemplate:
+  atespace: s
+  name: tmpl
+status:
+  state: ACTOR_STATE_RUNNING
+  crash:
+    message: exit <1> & core
 `
 	if diff := cmp.Diff(expected, buf.String()); diff != "" {
 		t.Errorf("output mismatch (-want +got):\n%s", diff)

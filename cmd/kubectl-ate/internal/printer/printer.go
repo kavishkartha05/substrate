@@ -15,6 +15,7 @@
 package printer
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"go.ate.dev/substrate/api/ateapi/v1"
+	goyaml "go.yaml.in/yaml/v2"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -418,6 +420,8 @@ func PrintAtespaceTo(out io.Writer, atespace *ateapi.Atespace, format string) er
 	return PrintAtespacesTo(out, []*ateapi.Atespace{atespace}, format)
 }
 
+// printProto prints msg with its fields in proto declaration order, the order
+// protojson writes them in.
 func printProto(out io.Writer, msg proto.Message, format string) error {
 	m := protojson.MarshalOptions{}
 	b, err := m.Marshal(msg)
@@ -425,20 +429,14 @@ func printProto(out io.Writer, msg proto.Message, format string) error {
 		return err
 	}
 
-	// Normalize JSON output to ensure consistency across environments.
-	// This works around non-deterministic spacing in protojson.
-	// See: https://github.com/golang/protobuf/issues/1121
-	var obj any
-	if err := json.Unmarshal(b, &obj); err != nil {
-		return fmt.Errorf("failed to unmarshal protojson: %w", err)
-	}
-	b, err = json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal indent: %w", err)
-	}
-
 	if format == "yaml" {
-		yb, err := yaml.JSONToYAML(b)
+		// yaml.JSONToYAML decodes into a map, which sorts the keys. A
+		// MapSlice keeps them in order.
+		var obj goyaml.MapSlice
+		if err := goyaml.Unmarshal(b, &obj); err != nil {
+			return fmt.Errorf("failed to unmarshal protojson: %w", err)
+		}
+		yb, err := goyaml.Marshal(obj)
 		if err != nil {
 			return err
 		}
@@ -447,9 +445,19 @@ func printProto(out io.Writer, msg proto.Message, format string) error {
 		return err
 	}
 
+	// Normalize JSON output to ensure consistency across environments.
+	// This works around non-deterministic spacing in protojson.
+	// See: https://github.com/golang/protobuf/issues/1121
+	var indented, escaped bytes.Buffer
+	if err := json.Indent(&indented, b, "", "  "); err != nil {
+		return fmt.Errorf("failed to indent protojson: %w", err)
+	}
+	// Escape <, > and & as json.Marshal does, as this output always has.
+	json.HTMLEscape(&escaped, indented.Bytes())
+
 	// We manually append a trailing newline here so the CLI output doesn't smash
 	// into the user's terminal prompt.
-	if _, err = out.Write(b); err != nil {
+	if _, err = out.Write(escaped.Bytes()); err != nil {
 		return err
 	}
 	_, err = out.Write([]byte{'\n'})
