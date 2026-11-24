@@ -223,8 +223,17 @@ type SnapshotNetDevice struct {
 	MAC string
 }
 
+// ateworker-microvm boots every VM with one net device of one queue pair, so a
+// snapshot config.json that asks for more was not written by it. Restore makes
+// a tap with that many queue FDs per device, so the counts are bounded.
+const (
+	maxSnapshotNetDevices    = 1
+	maxSnapshotNetQueuePairs = 1
+)
+
 // SnapshotNetDevices parses a CH snapshot's config.json and returns its net
-// devices, in order.
+// devices, in order. It rejects more devices or queue pairs than a VM boots
+// with.
 func SnapshotNetDevices(snapshotDir string) ([]SnapshotNetDevice, error) {
 	b, err := os.ReadFile(snapshotDir + "/config.json")
 	if err != nil {
@@ -240,11 +249,17 @@ func SnapshotNetDevices(snapshotDir string) ([]SnapshotNetDevice, error) {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing snapshot config.json: %w", err)
 	}
+	if len(cfg.Net) > maxSnapshotNetDevices {
+		return nil, fmt.Errorf("snapshot config.json has %d net devices, want at most %d", len(cfg.Net), maxSnapshotNetDevices)
+	}
 	var out []SnapshotNetDevice
 	for _, n := range cfg.Net {
 		qp := n.NumQueues / 2
 		if qp < 1 {
 			qp = 1
+		}
+		if qp > maxSnapshotNetQueuePairs {
+			return nil, fmt.Errorf("snapshot config.json net device %q has %d queue pairs, want at most %d", n.ID, qp, maxSnapshotNetQueuePairs)
 		}
 		out = append(out, SnapshotNetDevice{ID: n.ID, QueuePairs: qp, MAC: n.MAC})
 	}
