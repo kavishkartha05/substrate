@@ -128,6 +128,19 @@ func TestManagerOptionsMetricsListener(t *testing.T) {
 	}
 }
 
+// The manager serves the health checks main registers whether or not the
+// metrics listener is on.
+func TestManagerOptionsHealthProbeAddress(t *testing.T) {
+	t.Parallel()
+
+	for _, servePull := range []bool{true, false} {
+		opts := managerOptions(types.NamespacedName{Namespace: "ate-system", Name: "pool"}, servePull)
+		if opts.HealthProbeBindAddress != healthProbeAddr {
+			t.Errorf("servePull=%t: health probe address = %q, want %q", servePull, opts.HealthProbeBindAddress, healthProbeAddr)
+		}
+	}
+}
+
 func TestManagerOptionsScopeSecretCache(t *testing.T) {
 	t.Parallel()
 

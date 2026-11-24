@@ -142,6 +142,24 @@ spec:
         - name: healthz
           containerPort: 8081
           protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: healthz
+          periodSeconds: 10
+        # The manager serves probes only after the worker syncer's informer
+        # caches sync, which can take a while on a large cluster.
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: healthz
+          periodSeconds: 5
+          failureThreshold: 24
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: healthz
+          periodSeconds: 10
         volumeMounts:
         # Controller's own client identity presented to ateapi.
         - name: "podidentity"

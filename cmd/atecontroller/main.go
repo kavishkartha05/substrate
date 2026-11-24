@@ -112,6 +112,10 @@ const (
 	// turns it off.
 	metricsPullAddr = ":8080"
 	metricsOffAddr  = "0"
+
+	// healthProbeAddr serves /healthz and /readyz, the healthz port in
+	// ate-controller.yaml.
+	healthProbeAddr = ":8081"
 )
 
 // logr verbosity V(n) maps to slog level -n, so V(1) stays below Info until
@@ -132,8 +136,9 @@ func metricsBindAddr(servePull bool) string {
 // managerOptions configures the controller-runtime manager.
 func managerOptions(egressMITMCAPool types.NamespacedName, servePull bool) ctrl.Options {
 	return ctrl.Options{
-		Scheme:  scheme,
-		Metrics: metricsserver.Options{BindAddress: metricsBindAddr(servePull)},
+		Scheme:                 scheme,
+		Metrics:                metricsserver.Options{BindAddress: metricsBindAddr(servePull)},
+		HealthProbeBindAddress: healthProbeAddr,
 		Cache: cache.Options{
 			ByObject: map[client.Object]cache.ByObject{
 				&corev1.Secret{}: {
